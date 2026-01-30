@@ -12,10 +12,68 @@ const app = {
         }
     },
 
+    updateHash: () => {
+        const state = store.state;
+        if (!state.selectedClassId) {
+            // If no class selected, we might clear hash or keep it minimal
+            // But usually we want to preserve view/date even if class is lost? 
+            // Actually, if no class is selected, the app shows "Select a class".
+            history.replaceState(null, null, ' ');
+            return;
+        }
+
+        const params = new URLSearchParams();
+        params.set('class', state.selectedClassId);
+        params.set('view', state.viewMode);
+        params.set('date', utils.formatDateKey(state.viewDate)); // YYYY-MM-DD
+
+        window.location.hash = params.toString();
+    },
+
+    loadFromHash: () => {
+        const hash = window.location.hash.slice(1); // remove #
+        if (!hash) return false;
+
+        const params = new URLSearchParams(hash);
+        const classId = params.get('class');
+        const view = params.get('view');
+        const dateStr = params.get('date');
+
+        let changed = false;
+
+        // Restore Class
+        if (classId) {
+            // check if class exists
+            const cls = store.state.classes.find(c => c.id === classId);
+            if (cls) {
+                store.state.selectedClassId = classId;
+                changed = true;
+            }
+        }
+
+        // Restore View
+        if (view && ['day', 'month'].includes(view)) {
+            store.state.viewMode = view;
+            changed = true;
+        }
+
+        // Restore Date
+        if (dateStr) {
+            const d = new Date(dateStr);
+            if (!isNaN(d.getTime())) {
+                store.state.viewDate = d;
+                changed = true;
+            }
+        }
+
+        return changed;
+    },
+
     handlers: {
         setView: (view) => {
             store.state.viewMode = view;
-            app.init(); // Re-render
+            app.updateHash();
+            app.init({ animate: false }); // No full reload animation needed usually, but ok
         },
         changeDate: (delta) => {
             const d = new Date(store.state.viewDate);
@@ -25,7 +83,8 @@ const app = {
                 d.setDate(d.getDate() + delta);
             }
             store.state.viewDate = d;
-            app.init();
+            app.updateHash();
+            app.init({ animate: false });
         },
         openAddClassModal: () => {
             ui.nodes.inputClassName.value = '';
@@ -35,12 +94,14 @@ const app = {
             const name = ui.nodes.inputClassName.value;
             if (name) {
                 store.addClass(name);
+                app.updateHash(); // logic in store.addClass sets selectedClassId
                 app.init();
             }
         },
         selectClass: (id) => {
             store.state.selectedClassId = id;
-            store.save(); // Save selection
+            store.save(); // Save selection to localstorage (backup)
+            app.updateHash();
             app.init();
         },
 
@@ -54,6 +115,7 @@ const app = {
             if (app.cache.deletingClassId) {
                 store.deleteClass(app.cache.deletingClassId);
                 app.cache.deletingClassId = null;
+                app.updateHash(); // might clear hash if no class left
                 app.init();
             }
         },
@@ -281,10 +343,20 @@ const app = {
 
     init: (options = { animate: true }) => {
         store.load();
+
+        // NEW: Load state from URL hash if present
+        app.loadFromHash();
+
         ui.init();
         ui.renderSidebar();
         ui.renderHeader();
         ui.renderContent();
+
+        // Update hash initially if it was empty, to reflect loaded state
+        // But only if we have a selected class (otherwise hash stays empty/clean)
+        if (store.state.selectedClassId && !window.location.hash) {
+            app.updateHash();
+        }
 
         // Animation for cards
         if (options.animate) {
