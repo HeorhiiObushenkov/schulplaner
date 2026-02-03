@@ -21,6 +21,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 
+    <!-- SUPABASE -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
     <!-- DAISYUI & TAILWIND -->
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.6.0/dist/full.min.css" rel="stylesheet" type="text/css" />
     <script src="https://cdn.tailwindcss.com"></script>
@@ -94,6 +97,16 @@
                     <!-- Dynamic Title -->
                     Übersicht
                 </h2>
+                <!-- SYNC STATUS -->
+                <div id="syncStatus"
+                    class="hidden flex items-center gap-2 text-xs font-medium bg-base-200 px-3 py-1 rounded-full border border-base-300">
+                    <span class="relative flex h-2 w-2">
+                        <span id="syncDotPing"
+                            class="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
+                        <span id="syncDot" class="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
+                    </span>
+                    <span id="syncText">Online</span>
+                </div>
             </div>
 
             <div class="flex items-center gap-2">
@@ -138,6 +151,40 @@
     </main>
 
     <!-- MODALS -->
+
+    <!-- Login Modal -->
+    <dialog id="modal_login" class="modal">
+        <div class="modal-box rounded-box border border-base-300 bg-base-100 p-8 shadow-none w-full max-w-sm">
+            <h3 class="font-bold text-2xl mb-2 text-center">Login</h3>
+            <p class="text-center text-base-content/50 mb-6">Bitte identifiziere dich.</p>
+
+            <div class="flex flex-col gap-4">
+                <label class="form-control w-full">
+                    <div class="label"><span class="label-text">Dein Name (Lehrer)</span></div>
+                    <input type="text" id="inputLoginName" placeholder="z.B. Herr Müller"
+                        class="input input-bordered w-full rounded-full shadow-none" />
+                </label>
+
+                <label class="form-control w-full">
+                    <div class="label"><span class="label-text">Geheimes Passwort</span></div>
+                    <input type="password" id="inputLoginPassword" placeholder="••••••••"
+                        class="input input-bordered w-full rounded-full shadow-none" />
+                </label>
+
+                <p id="loginError" class="text-error text-sm text-center hidden flex items-center justify-center gap-1">
+                    <i data-lucide="alert-circle" class="w-3 h-3"></i>
+                    <span>Falsches Passwort</span>
+                </p>
+            </div>
+
+            <div class="modal-action flex-col gap-2">
+                <button class="btn btn-primary rounded-full w-full shadow-none" onclick="app.handlers.submitLogin()">
+                    Anmelden
+                </button>
+            </div>
+        </div>
+        <!-- No backdrop close for login -->
+    </dialog>
 
     <!-- Add Class Modal -->
     <dialog id="modal_add_class" class="modal">
@@ -309,6 +356,14 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Summary Toggle -->
+                <div class="form-control">
+                    <label class="label cursor-pointer justify-start gap-4">
+                        <input type="checkbox" class="toggle toggle-primary" id="toggleDownloadSummary" checked />
+                        <span class="label-text font-medium">Zusammenfassung hinzufügen</span>
+                    </label>
+                </div>
             </div>
 
             <div class="modal-action">
@@ -352,7 +407,9 @@
     </dialog>
 
     <!-- JS MODULES -->
+    <script src="js/config.js"></script>
     <script src="js/utils.js"></script>
+    <script src="js/supabase-client.js"></script>
     <script src="js/store.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/app.js"></script>

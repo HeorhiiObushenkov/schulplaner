@@ -6,26 +6,56 @@ const store = {
         viewMode: 'day', // 'day', 'month'
     },
 
-    load() {
+    // Updated load to be async and fetch from Supabase
+    async load() {
+        // 1. Load Local Fallback
         const saved = localStorage.getItem('student_tracker_data');
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
                 this.state.classes = parsed.classes || [];
                 store.state.selectedClassId = parsed.selectedClassId || null;
-                // Re-instantiate dates if needed, but strings work for keys
-            } catch (e) {
-                console.error("Failed to load data", e);
-            }
+            } catch (e) { console.error("Failed to load local data", e); }
+        }
+
+        // 2. Fetch Remote (if online)
+        const remoteData = await sb.fetchState();
+        if (remoteData) {
+            this.mergeState(remoteData);
         }
     },
 
+    // Merge remote data into local state
+    mergeState(remoteData) {
+        if (!remoteData) return;
+
+        // For simplicity in this version, Remote always wins if valid
+        // But we try to preserve selectedClassId/viewMode from local session if possible
+        const currentSelection = this.state.selectedClassId;
+        const currentView = this.state.viewMode;
+
+        this.state.classes = remoteData.classes || [];
+
+        // Only override selection if it was null or invalid
+        if (!currentSelection && remoteData.selectedClassId) {
+            this.state.selectedClassId = remoteData.selectedClassId;
+        }
+
+        console.log("State merged from remote");
+        // Update UI immediately
+        if (window.app && window.app.render) window.app.render();
+    },
+
     save() {
+        // Local Save (Backup)
         const dataToSave = {
             classes: this.state.classes,
             selectedClassId: this.state.selectedClassId
         };
         localStorage.setItem('student_tracker_data', JSON.stringify(dataToSave));
+
+        // Remote Save
+        sb.saveState(dataToSave);
     },
 
     // ACTIONS

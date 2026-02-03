@@ -21,6 +21,18 @@ const ui = {
         // Alert Elements
         alertTitle: document.getElementById('alertTitle'),
         alertMessage: document.getElementById('alertMessage'),
+
+        // Login
+        modalLogin: document.getElementById('modal_login'),
+        inputLoginName: document.getElementById('inputLoginName'),
+        inputLoginPassword: document.getElementById('inputLoginPassword'),
+        loginError: document.getElementById('loginError'),
+
+        // Sync Helper
+        syncStatus: document.getElementById('syncStatus'),
+        syncDot: document.getElementById('syncDot'),
+        syncDotPing: document.getElementById('syncDotPing'),
+        syncText: document.getElementById('syncText'),
     },
 
     init() {
@@ -44,12 +56,64 @@ const ui = {
 
         this.nodes.alertTitle = document.getElementById('alertTitle');
         this.nodes.alertMessage = document.getElementById('alertMessage');
+
+        this.nodes.modalLogin = document.getElementById('modal_login');
+        this.nodes.inputLoginName = document.getElementById('inputLoginName');
+        this.nodes.inputLoginPassword = document.getElementById('inputLoginPassword');
+        this.nodes.loginError = document.getElementById('loginError');
+
+        this.nodes.syncStatus = document.getElementById('syncStatus');
+        this.nodes.syncDot = document.getElementById('syncDot');
+        this.nodes.syncDotPing = document.getElementById('syncDotPing');
+        this.nodes.syncText = document.getElementById('syncText');
     },
 
     showError(msg, title = "Hinweis") {
         this.nodes.alertTitle.textContent = title;
         this.nodes.alertMessage.textContent = msg;
         this.nodes.modalAlert.showModal();
+    },
+
+    setSyncStatus(status) {
+        const { syncStatus, syncDot, syncDotPing, syncText } = this.nodes;
+        syncStatus.classList.remove('hidden');
+
+        // Reset classes
+        syncDot.className = "relative inline-flex rounded-full h-2 w-2";
+        syncDotPing.className = "absolute inline-flex h-full w-full rounded-full opacity-75";
+
+        if (status === 'online') {
+            syncDot.classList.add('bg-success');
+            syncDotPing.classList.add('bg-success', 'animate-ping');
+            syncText.textContent = "Online";
+        } else if (status === 'syncing') {
+            syncDot.classList.add('bg-warning');
+            syncDotPing.classList.add('bg-warning', 'animate-ping');
+            syncText.textContent = "Syncing...";
+        } else if (status === 'offline') {
+            syncDot.classList.add('bg-base-content/30');
+            syncDotPing.classList.add('hidden');
+            syncText.textContent = "Offline";
+        } else if (status === 'error') {
+            syncDot.classList.add('bg-error');
+            syncDotPing.classList.add('hidden');
+            syncText.textContent = "Fehler";
+        }
+    },
+
+    showToast(message) {
+        // Simple toast implementation tailored for "Update received"
+        const toast = document.createElement('div');
+        toast.className = "toast toast-end z-50 animate-slide-up";
+        toast.innerHTML = `
+            <div class="alert alert-info text-white shadow-lg">
+                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                <span>${message}</span>
+            </div>
+        `;
+        document.body.appendChild(toast);
+        lucide.createIcons();
+        setTimeout(() => toast.remove(), 3000);
     },
 
     renderSidebar() {

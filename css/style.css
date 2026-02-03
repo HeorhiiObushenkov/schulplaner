@@ -5,8 +5,8 @@ body {
     background-color: #f9fafb; /* Soft background */
 }
 
-/* STRICT NO SHADOW POLICY */
-* {
+/* STRICT NO SHADOW POLICY (Excluding form controls that need it) */
+*:not(.toggle) {
     box-shadow: none !important;
     --tw-shadow: 0 0 transparent !important;
 }

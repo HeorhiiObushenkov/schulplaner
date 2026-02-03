@@ -70,6 +70,23 @@ const app = {
     },
 
     handlers: {
+        submitLogin: async () => {
+            const name = ui.nodes.inputLoginName.value;
+            const pass = ui.nodes.inputLoginPassword.value;
+
+            ui.nodes.loginError.classList.add('hidden');
+
+            if (!name || !pass) return;
+
+            const success = await sb.login(name, pass);
+            if (success) {
+                ui.nodes.modalLogin.close();
+                app.init(); // Restart init to load data
+            } else {
+                ui.nodes.loginError.classList.remove('hidden');
+            }
+        },
+
         setView: (view) => {
             store.state.viewMode = view;
             app.updateHash();
@@ -219,10 +236,11 @@ const app = {
             if (months.length === 0) {
                 return ui.showError("Bitte wähle mindestens einen Monat aus.", "Kein Zeitraum");
             }
-            app.handlers.exportPDF(months, ignoredStudentIds);
+            const includeSummary = document.getElementById('toggleDownloadSummary').checked;
+            app.handlers.exportPDF(months, ignoredStudentIds, includeSummary);
         },
 
-        exportPDF: (selectedMonths, ignoredStudentIds) => {
+        exportPDF: (selectedMonths, ignoredStudentIds, includeSummary) => {
             const cls = store.getSelectedClass();
             if (!cls) return ui.showError("Bitte wähle eine Klasse aus.", "Export Fehler");
 
@@ -254,43 +272,17 @@ const app = {
 
             let startY = 30 + (timeLines.length * 5) + 5;
 
-            // Prepare Data
-            const tableData = [];
-
-            cls.students.forEach(student => {
-                // Skip ignored students
-                if (ignoredStudentIds && ignoredStudentIds.includes(student.id)) return;
-
-                Object.entries(student.records).forEach(([dateStr, mins]) => {
-                    const recDate = new Date(dateStr);
-                    if (recDate.getFullYear() === year && selectedMonths.includes(recDate.getMonth())) {
-                        tableData.push([
-                            utils.formatDateDisplay(recDate), // Use util for nice format
-                            student.name,
-                            `${mins} Min.`
-                        ]);
-                    }
-                });
-            });
-
-            // Sort by date then student name
-            tableData.sort((a, b) => {
-                const dateA = new Date(a[0].split('.').reverse().join('-')); // Assuming DD.MM.YYYY
-                const dateB = new Date(b[0].split('.').reverse().join('-'));
-                // Use a simpler date parse if utils.formatDateDisplay returns German format
-                // Actually let's just stick to reliable parsing. 
-                // Since I used utils.formatDateDisplay, I should check what it returns.
-                // Assuming standard date sorting on original data is safer but tableData strings are hard to sort.
-                // Let's rely on the order of insertion if we iterate chronologically? 
-                // Better: keep raw date for sorting.
-                return 0;
-            });
-
-            // Re-sort properly
-            // Let's rebuild tableData with raw objects first
+            // Prepare Data for Detail Table
             const rows = [];
+
+            // Prepare Data for Summary Table
+            const summaryMap = new Map(); // studentId -> totalMinutes
+
             cls.students.forEach(student => {
                 if (ignoredStudentIds && ignoredStudentIds.includes(student.id)) return;
+
+                let studentTotal = 0;
+
                 Object.entries(student.records).forEach(([dateStr, mins]) => {
                     const recDate = new Date(dateStr);
                     if (recDate.getFullYear() === year && selectedMonths.includes(recDate.getMonth())) {
@@ -300,8 +292,13 @@ const app = {
                             name: student.name,
                             mins: `${mins} Min.`
                         });
+                        studentTotal += mins;
                     }
                 });
+
+                if (includeSummary) {
+                    summaryMap.set(student.name, studentTotal); // Use name for simple map, or id if name conflict pos
+                }
             });
 
             rows.sort((a, b) => a.rawDate - b.rawDate || a.name.localeCompare(b.name));
@@ -309,25 +306,11 @@ const app = {
             const finalTableBody = rows.map(r => [r.dateStr, r.name, r.mins]);
 
             if (finalTableBody.length === 0) {
-                // Close modal if open to show alert
-                // But wait, submitDownload calls this. 
-                // The modal stays open unless we close it? 
-                // Native dialog form method="dialog" closes it on submit? 
-                // No, I used a button with onclick, inside form method="dialog". 
-                // That button submits the form and closes the dialog.
-                // But I added e.preventDefault() in my logic? 
-                // No, I didn't in submitDownload button HTML.
-                // So the modal WILL close.
-
-                // Let's verify: In HTML:
-                // <button class="btn btn-primary..." onclick="app.handlers.submitDownload()">
-                // It is inside <form method="dialog">.
-                // Clicking it will submit the form and close the dialog, AND trigger onclick.
-                // So the dialog closes.
                 ui.showError("Keine Verspätungen für diesen Zeitraum gefunden.", "Leerer Bericht");
                 return;
             }
 
+            // Draw Detail Table
             doc.autoTable({
                 head: [['Datum', 'Schüler', 'Verspätung']],
                 body: finalTableBody,
@@ -337,24 +320,78 @@ const app = {
                 headStyles: { fillColor: [66, 66, 66] }
             });
 
+            // Draw Summary Table if requested
+            if (includeSummary) {
+                const summaryBody = Array.from(summaryMap.entries())
+                    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])) // Descending time, then Alpha
+                    .map(([name, total]) => [name, `${total} Min.`]);
+
+                const finalY = doc.lastAutoTable.finalY || startY; // Get end of previous table
+
+                // Check space? autoTable does page break auto.
+                // Title for Summary
+
+                // Add some spacing
+                let summaryStartY = finalY + 15;
+
+                // Simple check if we are near end of page, force new page? 
+                // A4 height ~297mm. If > 250, maybe new page? 
+                if (summaryStartY > 270) {
+                    doc.addPage();
+                    summaryStartY = 20;
+                }
+
+                doc.setFontSize(14);
+                doc.setTextColor(0);
+                doc.text("Zusammenfassung (Gesamtzeit)", 14, summaryStartY - 5);
+
+                doc.autoTable({
+                    head: [['Schüler', 'Gesamtzeit']],
+                    body: summaryBody,
+                    startY: summaryStartY,
+                    theme: 'grid',
+                    styles: { font: 'helvetica', fontSize: 10 },
+                    headStyles: { fillColor: [100, 100, 100] } // Slightly different color maybe?
+                });
+            }
+
             doc.save(`Verspaetung_${cls.name}_${year}.pdf`);
         }
     },
 
-    init: (options = { animate: true }) => {
-        store.load();
+    init: async (options = { animate: true }) => {
+        ui.init();
+        sb.init();
+
+        // 1. Auth Check
+        if (!sb.currentUser) {
+            ui.nodes.modalLogin.showModal();
+            return;
+        }
+
+        // 2. Load Data (Async)
+        // Only load if we haven't already (or force reload). 
+        // But for init, we definitely want to load.
+        await store.load();
+
+        // 3. Realtime Subscription
+        sb.subscribe((remoteData) => {
+            store.mergeState(remoteData);
+        });
 
         // NEW: Load state from URL hash if present
         app.loadFromHash();
 
-        ui.init();
+        app.render({ animate: options.animate });
+    },
+
+    render: (options = { animate: false }) => {
         ui.renderSidebar();
         ui.renderHeader();
         ui.renderContent();
 
-        // Update hash initially if it was empty, to reflect loaded state
-        // But only if we have a selected class (otherwise hash stays empty/clean)
-        if (store.state.selectedClassId && !window.location.hash) {
+        // Update hash
+        if (store.state.selectedClassId) {
             app.updateHash();
         }
 
@@ -374,4 +411,4 @@ const app = {
 
 window.app = app;
 // Start
-window.addEventListener('DOMContentLoaded', app.init);
+window.addEventListener('DOMContentLoaded', () => app.init());
